@@ -8,7 +8,7 @@ const jbmono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${jbmono.variable}`}>
-      <body className="min-h-dvh bg-background text-foreground antialiased">
+      <body suppressHydrationWarning className="min-h-dvh bg-background text-foreground antialiased">
         <Header />
         <main className="mx-auto max-w-6xl px-4 py-10">{children}</main>
       </body>
