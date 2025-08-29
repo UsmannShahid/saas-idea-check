@@ -1,27 +1,25 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useForm, SubmitHandler } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { computeScore } from "@/lib/scoring";
-import ScoreChip from "@/components/ScoreChip";
+import { RadioCard } from "@/components/RadioCard";
 
-// 1..5 radios as numbers
-const oneToFive = z.coerce.number().int().min(1).max(5);
-
-// Schema (same fields, we’ll render them across steps)
+// Schema (same fields, we'll render them across steps)
 const Schema = z.object({
   idea: z.string().min(10, "Give us 1–2 sentences about your idea."),
-  problemSeverity: oneToFive,
-  willingnessToPay: oneToFive,
-  reachability: oneToFive,
-  competitionDensity: oneToFive,
-  differentiationClarity: oneToFive,
-  mvpFeasibility: oneToFive,
-  audienceClarity: oneToFive,
-  organicPotential: oneToFive,
-  recurringUse: oneToFive,
+  problemSeverity: z.coerce.number().int().min(1).max(5),
+  willingnessToPay: z.coerce.number().int().min(1).max(5),
+  reachability: z.coerce.number().int().min(1).max(5),
+  competitionDensity: z.coerce.number().int().min(1).max(5),
+  differentiationClarity: z.coerce.number().int().min(1).max(5),
+  mvpFeasibility: z.coerce.number().int().min(1).max(5),
+  audienceClarity: z.coerce.number().int().min(1).max(5),
+  organicPotential: z.coerce.number().int().min(1).max(5),
+  recurringUse: z.coerce.number().int().min(1).max(5),
   // optional future bonus:
   // icpSpecific: z.coerce.boolean().optional(),
 });
@@ -40,7 +38,7 @@ function Progress({ value }: { value: number }) {
   );
 }
 
-// Reusable radio row (1..5)
+// Reusable radio row (1..5) using RadioCard components
 function RadioRow({
   name,
   label,
@@ -62,23 +60,14 @@ function RadioRow({
       </div>
       <div className="flex gap-2">
         {[1, 2, 3, 4, 5].map((v) => (
-          <label
+          <RadioCard
             key={v}
-            className="flex-1 cursor-pointer rounded-2xl border border-border p-3 text-center hover:bg-muted"
-          >
-            <input
-              type="radio"
-              value={v}
-              {...register(name)}
-              className="peer sr-only"
-            />
-            <span className="block text-sm font-medium peer-checked:text-primary">
-              {v}
-            </span>
-            <span className="mt-1 block text-[11px] text-muted-fg">
-              {v === 1 ? "Low" : v === 3 ? "Medium" : v === 5 ? "High" : "\u00A0"}
-            </span>
-          </label>
+            name={name}
+            value={v}
+            register={register}
+            labelTop={v.toString()}
+            labelBottom={v === 1 ? "Low" : v === 3 ? "Medium" : v === 5 ? "High" : undefined}
+          />
         ))}
       </div>
       {error && <p className="text-warning text-sm">{error}</p>}
@@ -87,6 +76,8 @@ function RadioRow({
 }
 
 export default function EvaluatePage() {
+  const router = useRouter();
+  
   // Wizard state
   const steps = useMemo(
     () => [
@@ -100,17 +91,12 @@ export default function EvaluatePage() {
   const [step, setStep] = useState(0);
   const progress = Math.round(((step + 1) / steps.length) * 100);
 
-  // Final score
-  const [finalScore, setFinalScore] = useState<number | null>(null);
-  const [verdictText, setVerdictText] = useState<string | null>(null);
-
   // Form
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
     trigger,
-    getValues,
   } = useForm<FormData>({
     resolver: zodResolver(Schema),
     defaultValues: {
@@ -162,9 +148,8 @@ export default function EvaluatePage() {
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
   // Final submit (on last step)
-  const onSubmit: SubmitHandler<FormData> = () => {
-    const data = getValues();
-    const { score, verdict } = computeScore({
+  const onSubmit: SubmitHandler<FormData> = (data) => {
+    const result = computeScore({
       problemSeverity: data.problemSeverity,
       audienceClarity: data.audienceClarity,
       willingnessToPay: data.willingnessToPay,
@@ -175,8 +160,10 @@ export default function EvaluatePage() {
       mvpFeasibility: data.mvpFeasibility,
       recurringUse: data.recurringUse,
     });
-    setFinalScore(score);
-    setVerdictText(verdict);
+    
+    // Navigate to result page with data
+    const resultData = encodeURIComponent(JSON.stringify(result));
+    router.push(`/result?data=${resultData}`);
   };
 
   return (
@@ -186,8 +173,27 @@ export default function EvaluatePage() {
           Evaluate your idea
         </h1>
         <Progress value={progress} />
-        <p className="text-sm text-muted-fg">
-          Step {step + 1} of {steps.length} · {steps[step].title}
+        
+        {/* Step Pills */}
+        <div className="flex items-center justify-center gap-2">
+          {steps.map((_, index) => (
+            <div
+              key={index}
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
+                index === step
+                  ? "bg-primary text-white shadow-soft scale-110"
+                  : index < step
+                  ? "bg-primary/20 text-primary"
+                  : "bg-muted text-muted-fg"
+              }`}
+            >
+              {index + 1}
+            </div>
+          ))}
+        </div>
+        
+        <p className="text-sm text-muted-fg text-center">
+          {steps[step].title}
         </p>
       </div>
 
@@ -198,7 +204,7 @@ export default function EvaluatePage() {
       >
         {/* STEP 1 — Idea */}
         {step === 0 && (
-          <div className="space-y-4 animate-fadeInUp">
+          <div className="space-y-4 animate-fadeInUp" key="step-0">
             <label className="block text-sm font-medium">
               Describe your idea
               <textarea
@@ -216,7 +222,7 @@ export default function EvaluatePage() {
 
         {/* STEP 2 — Market & demand */}
         {step === 1 && (
-          <div className="space-y-6 animate-fadeInUp">
+          <div className="space-y-6 animate-slideIn" key="step-1">
             <RadioRow
               name="problemSeverity"
               label="How painful is the problem you solve?"
@@ -243,7 +249,7 @@ export default function EvaluatePage() {
 
         {/* STEP 3 — Competition & feasibility */}
         {step === 2 && (
-          <div className="space-y-6 animate-fadeInUp">
+          <div className="space-y-6 animate-scaleIn" key="step-2">
             <RadioRow
               name="competitionDensity"
               label="How crowded is your exact niche?"
@@ -272,7 +278,7 @@ export default function EvaluatePage() {
 
         {/* STEP 4 — Audience & retention */}
         {step === 3 && (
-          <div className="space-y-6 animate-fadeInUp">
+          <div className="space-y-6 animate-fadeInUp" key="step-3">
             <RadioRow
               name="audienceClarity"
               label="How clearly defined is your ideal customer profile?"
@@ -327,21 +333,6 @@ export default function EvaluatePage() {
           )}
         </div>
       </form>
-
-      {/* Result */}
-      {finalScore !== null && (
-        <div className="pt-4 space-y-2">
-          <ScoreChip score={finalScore} />
-          {verdictText && (
-            <p className="text-sm text-muted-fg">
-              Verdict: <span className="font-medium">{verdictText}</span>
-            </p>
-          )}
-          <p className="text-sm text-muted-fg">
-            Great! Next we’ll move this to a dedicated result page.
-          </p>
-        </div>
-      )}
     </section>
   );
 }

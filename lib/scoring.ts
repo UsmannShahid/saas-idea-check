@@ -28,6 +28,22 @@ const WEIGHTS = {
 
 export type Verdict = "Strong" | "Promising" | "Risky" | "Weak";
 
+export type ScoreResult = {
+  score: number;
+  verdict: Verdict;
+  subscores: {
+    market: number;
+    monetization: number;
+    competitionMoat: number;
+    distribution: number;
+    feasibility: number;
+    retention: number;
+  };
+  strengths: string[];
+  risks: string[];
+  nextSteps: string[];
+};
+
 export function verdictFor(score: number): Verdict {
   if (score >= 80) return "Strong";
   if (score >= 60) return "Promising";
@@ -35,7 +51,51 @@ export function verdictFor(score: number): Verdict {
   return "Weak";
 }
 
-export function computeScore(a: Answers) {
+function generateInsights(a: Answers, score: number): { strengths: string[]; risks: string[]; nextSteps: string[] } {
+  const strengths: string[] = [];
+  const risks: string[] = [];
+  const nextSteps: string[] = [];
+
+  // Generate strengths
+  if (a.problemSeverity >= 4) strengths.push("Addresses a critical, painful problem");
+  if (a.willingnessToPay >= 4) strengths.push("Strong market validation - people already pay for solutions");
+  if (a.audienceClarity >= 4) strengths.push("Clear, well-defined target customer");
+  if (a.differentiationClarity >= 4) strengths.push("Strong differentiation from competitors");
+  if (a.mvpFeasibility >= 4) strengths.push("Quick time-to-market with MVP");
+  if (a.reachability >= 4) strengths.push("Multiple proven channels to reach customers");
+  if (a.organicPotential >= 4) strengths.push("High potential for organic growth");
+  if (a.recurringUse >= 4) strengths.push("High usage frequency drives retention");
+
+  // Generate risks
+  if (a.competitionDensity >= 4) risks.push("Highly competitive market with strong incumbents");
+  if (a.problemSeverity <= 2) risks.push("Problem may not be painful enough to drive purchases");
+  if (a.willingnessToPay <= 2) risks.push("Market may not be willing to pay for solutions");
+  if (a.reachability <= 2) risks.push("Difficult to reach target customers cost-effectively");
+  if (a.differentiationClarity <= 2) risks.push("Unclear differentiation from existing solutions");
+  if (a.mvpFeasibility <= 2) risks.push("Long development time may miss market opportunity");
+  if (a.recurringUse <= 2) risks.push("Low usage frequency may hurt retention and LTV");
+
+  // Generate next steps based on score and weaknesses
+  if (score >= 70) {
+    nextSteps.push("Build and test MVP with early customers");
+    nextSteps.push("Validate pricing with target audience");
+    nextSteps.push("Develop go-to-market strategy");
+  } else if (score >= 50) {
+    if (a.audienceClarity <= 3) nextSteps.push("Define ideal customer profile more clearly");
+    if (a.problemSeverity <= 3) nextSteps.push("Validate problem severity with potential customers");
+    if (a.willingnessToPay <= 3) nextSteps.push("Research willingness to pay through customer interviews");
+    nextSteps.push("Address key weaknesses before building");
+  } else {
+    nextSteps.push("Consider pivoting or major adjustments to the idea");
+    if (a.problemSeverity <= 2) nextSteps.push("Find a more critical problem to solve");
+    if (a.audienceClarity <= 2) nextSteps.push("Narrow down to a specific customer segment");
+    nextSteps.push("Conduct extensive market research before proceeding");
+  }
+
+  return { strengths, risks, nextSteps };
+}
+
+export function computeScore(a: Answers): ScoreResult {
   // Invert competition: 1→5 (blue ocean) … 5→1 (red ocean)
   const invCompetition = 6 - a.competitionDensity;
 
@@ -65,5 +125,17 @@ export function computeScore(a: Answers) {
   const score = Math.max(0, Math.min(100, Math.round(base)));
   const verdict = verdictFor(score);
 
-  return { score, verdict };
+  // Calculate subscores (0-100 scale)
+  const subscores = {
+    market: Math.round((a.problemSeverity + a.audienceClarity) * 10), // max 100
+    monetization: Math.round((a.willingnessToPay + (a.pricingLeverage ?? 3)) * 10), // max 100
+    competitionMoat: Math.round((invCompetition + a.differentiationClarity) * 10), // max 100
+    distribution: Math.round((a.reachability + a.organicPotential) * 10), // max 100
+    feasibility: Math.round(a.mvpFeasibility * 20), // max 100
+    retention: Math.round(a.recurringUse * 20), // max 100
+  };
+
+  const { strengths, risks, nextSteps } = generateInsights(a, score);
+
+  return { score, verdict, subscores, strengths, risks, nextSteps };
 }
